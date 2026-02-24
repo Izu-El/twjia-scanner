@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TWJIA Smart QR Scanner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: linear-gradient(135deg, #001f3f 0%, #004080 50%, #0074D9 100%);
+      font-family: 'Poppins', 'Segoe UI', Arial, sans-serif;
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    /* LOGIN SCREEN */
+    #loginScreen {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(135deg, #001f3f 0%, #004080 100%);
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .login-box {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 20px;
+      text-align: center;
+      width: 90%;
+      max-width: 350px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .login-input {
+      width: 100%; padding: 15px; font-size: 1.5em; margin: 20px 0;
+      border: none; border-radius: 12px; text-align: center; letter-spacing: 5px;
+      outline: none; background: white; color: #001f3f;
+    }
+    .btn-login {
+      background: #2ecc71; color: white; border: none; padding: 15px;
+      width: 100%; border-radius: 12px; font-size: 1.1em; cursor: pointer;
+      font-weight: bold; transition: transform 0.2s;
+    }
+    .btn-login:active { transform: scale(0.95); }
+    .btn-login:disabled { background: #95a5a6; cursor: not-allowed; }
+
+    /* MAIN APP */
+    #appContent {
+      display: none;
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .header { text-align: center; margin-bottom: 20px; width: 100%; }
+    .school-name { font-size: 1.5em; font-weight: 700; margin-bottom: 5px; }
+    
+    /* Offline Indicator */
+    .offline-banner {
+      background: #e74c3c;
+      padding: 10px;
+      border-radius: 10px;
+      margin: 10px 0;
+      display: none;
+      animation: pulse 2s infinite;
+      width: 100%;
+      text-align: center;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    /* Mode Buttons */
+    .mode-selector { display: flex; gap: 15px; margin-bottom: 20px; width: 100%; }
+    .mode-btn {
+      flex: 1; padding: 15px; border: none; border-radius: 12px;
+      font-weight: 700; cursor: pointer; opacity: 0.6;
+      transition: all 0.3s ease; color: white;
+      background: rgba(255,255,255,0.2);
+    }
+    .mode-btn.active-in { background: #2ecc71; opacity: 1; transform: scale(1.05); }
+    .mode-btn.active-out { background: #e74c3c; opacity: 1; transform: scale(1.05); }
+
+    /* Manual Entry Section */
+    .manual-entry {
+      background: rgba(255,255,255,0.1);
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      width: 100%;
+      display: none;
+    }
+    .manual-entry.active { display: block; }
+    .manual-input {
+      width: 100%; padding: 12px; font-size: 1em; margin: 10px 0;
+      border: none; border-radius: 8px; outline: none;
+    }
+    .btn-submit-manual {
+      background: #3498db; color: white; border: none; padding: 12px;
+      width: 100%; border-radius: 8px; cursor: pointer; font-weight: bold;
+    }
+
+    /* Scanner Controls Row */
+    .scanner-controls {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .scanner-controls select {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      outline: none;
+      font-size: 14px;
+    }
+    .control-btn {
+      width: 48px;
+      height: 48px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.15);
+      color: white;
+      cursor: pointer;
+      font-size: 1.3em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .control-btn:active { transform: scale(0.95); }
+    .control-btn.active { background: #2ecc71; }
+    .control-btn.muted { background: #e74c3c; }
+
+    /* Scanner */
+    .scanner-container {
+      position: relative;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+    .scanner-overlay {
+      position: relative;
+      width: 100%;
+      background: white;
+      border: 4px solid #2ecc71;
+      border-radius: 16px;
+      overflow: hidden;
+      transition: border-color 0.3s;
+      min-height: 250px;
+    }
+    .scanner-overlay.mode-out { border-color: #e74c3c; }
+    
+    /* Camera Paused Overlay */
+    .camera-paused-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, #2c3e50 0%, #1a252f 100%);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .camera-paused-overlay.active { display: flex; }
+    .camera-paused-overlay .icon { font-size: 3em; margin-bottom: 10px; opacity: 0.8; }
+    .camera-paused-overlay .text { font-size: 1.1em; opacity: 0.9; }
+    .camera-paused-overlay .subtext { font-size: 0.85em; opacity: 0.6; margin-top: 5px; }
+
+    /* Scan Flash Effect */
+    .scan-flash {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      border-radius: 12px;
+      opacity: 0;
+      z-index: 5;
+    }
+    .scan-flash.success {
+      background: rgba(46, 204, 113, 0.4);
+      animation: flashFade 0.5s ease-out;
+    }
+    .scan-flash.warning {
+      background: rgba(241, 196, 15, 0.4);
+      animation: flashFade 0.5s ease-out;
+    }
+    .scan-flash.error {
+      background: rgba(231, 76, 60, 0.4);
+      animation: flashFade 0.5s ease-out;
+    }
+    @keyframes flashFade {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* Stats */
+    .stats {
+      display: flex; justify-content: space-around; width: 100%;
+      background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px;
+      margin-bottom: 15px;
+    }
+    .stat-item { text-align: center; }
+    .stat-number { font-size: 1.5em; font-weight: 700; }
+    .stat-label { font-size: 0.8em; opacity: 0.8; }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+    .action-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.15);
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+      font-size: 0.9em;
+    }
+    .action-btn:active { transform: scale(0.95); }
+
+    /* Activity Feed */
+    .activity-feed-container {
+      width: 100%;
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 15px;
+    }
+    .activity-feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .activity-feed-header h4 {
+      margin: 0;
+      font-size: 0.95em;
+      font-weight: 600;
+    }
+    .activity-feed-header .clear-btn {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.6);
+      cursor: pointer;
+      font-size: 0.8em;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .activity-feed-header .clear-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+    .activity-feed {
+      max-height: 200px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    .activity-feed::-webkit-scrollbar { width: 6px; }
+    .activity-feed::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+    .activity-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+    .activity-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 15px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      gap: 10px;
+      animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-item.success { background: rgba(46, 204, 113, 0.15); }
+    .activity-item.warning { background: rgba(241, 196, 15, 0.15); }
+    .activity-item.error { background: rgba(231, 76, 60, 0.15); }
+    .activity-icon { font-size: 1.3em; width: 30px; text-align: center; flex-shrink: 0; }
+    .activity-details { flex: 1; min-width: 0; }
+    .activity-name { font-weight: 600; font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-message { font-size: 0.8em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-time { font-size: 0.75em; opacity: 0.6; flex-shrink: 0; }
+    .activity-empty { text-align: center; padding: 30px 15px; opacity: 0.5; font-size: 0.9em; }
+
+    /* Critical Popup */
+    .popup-overlay { 
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+      background: rgba(0,0,0,0.8); z-index: 3000; align-items: center; 
+      justify-content: center; backdrop-filter: blur(5px); 
+    }
+    .popup { 
+      background: white; color: #001f3f; border-radius: 20px; 
+      width: 90%; max-width: 400px; animation: popIn 0.3s ease; 
+    }
+    @keyframes popIn { from {transform: scale(0.8); opacity:0;} to {transform: scale(1); opacity:1;} }
+    .popup-header { padding: 20px; text-align: center; border-bottom: 1px solid #eee; }
+    .popup-body { padding: 20px; }
+    .popup-footer { padding: 20px; text-align: center; }
+    .popup-btn { background: #004080; color: white; border: none; padding: 12px 30px; border-radius: 25px; cursor: pointer; font-size: 1em; }
+    .popup .popup-icon { font-size: 3em; }
+    .popup.error .popup-icon { color: #e74c3c; }
+
+    /* Loading Spinner */
+    .loading {
+      display: inline-block; width: 20px; height: 20px;
+      border: 3px solid rgba(255,255,255,.3); border-radius: 50%;
+      border-top-color: white; animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .footer { margin-top: 20px; font-size: 0.8em; opacity: 0.6; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <!-- LOGIN SCREEN -->
+  <div id="loginScreen">
+    <div class="login-box">
+      <div style="font-size: 3em; margin-bottom: 10px;">🔐</div>
+      <h2>Staff Access</h2>
+      <p style="opacity: 0.8; margin-bottom: 20px;">Enter your 5-digit passcode</p>
+      <input type="number" id="passcodeInput" class="login-input" placeholder="•••••" maxlength="5">
+      <button class="btn-login" onclick="doLogin()">
+        <span id="loginBtnText">Unlock Scanner</span>
+      </button>
+      <p id="loginMsg" style="color:#ff6b6b; margin-top:15px; font-weight:bold; min-height:20px;"></p>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="appContent" style="display:none;">
+    
+    <div class="offline-banner" id="offlineBanner">
+      📴 Offline Mode - Scans will sync when online
+    </div>
+
+    <div class="header">
+      <div class="school-name">🏫 TWJIA Attendance</div>
+      <div style="background:rgba(255,255,255,0.15); padding:8px 15px; border-radius:20px; display:inline-flex; align-items:center; gap:10px; margin-top:10px;">
+        <span id="staffDisplay">Loading...</span>
+        <button onclick="doLogout()" style="background:none; border:none; color:#ff9999; cursor:pointer; font-weight:bold;">(Logout)</button>
+      </div>
+    </div>
+
+    <div class="mode-selector">
+      <button id="btnIn" class="mode-btn active-in" onclick="setScanMode('arrival')">📍 CLOCK IN</button>
+      <button id="btnOut" class="mode-btn" onclick="setScanMode('departure')">🏃 CLOCK OUT</button>
+    </div>
+
+    <div class="action-buttons">
+      <button class="action-btn" onclick="toggleManualEntry()">🔢 Manual Entry</button>
+      <button class="action-btn" onclick="syncOfflineScans()">
+        🔄 Sync (<span id="queueCount">0</span>)
+      </button>
+    </div>
+
+    <div class="manual-entry" id="manualEntryForm">
+      <h3 style="margin-bottom: 10px;">Manual Entry</h3>
+      <input type="text" id="manualAdmission" class="manual-input" placeholder="Admission Number">
+      <select id="manualReason" class="manual-input">
+        <option value="">Select Reason</option>
+        <option value="damaged_qr">Damaged QR Code</option>
+        <option value="technical_issue">Technical Issue</option>
+        <option value="forgot_card">Forgot ID Card</option>
+        <option value="other">Other</option>
+      </select>
+      <button class="btn-submit-manual" onclick="submitManualEntry()">Submit</button>
+      <button class="btn-submit-manual" onclick="toggleManualEntry()" style="background:#95a5a6; margin-top:10px;">Cancel</button>
+    </div>
+
+    <div class="scanner-controls">
+      <select id="cameraSelect">
+        <option value="off">📷 Camera OFF</option>
+      </select>
+      <button class="control-btn" id="soundToggle" onclick="toggleSound()" title="Toggle Sound">🔊</button>
+    </div>
+
+    <div class="scanner-container">
+      <div id="reader" class="scanner-overlay"></div>
+      <div class="scan-flash" id="scanFlash"></div>
+      <div class="camera-paused-overlay" id="cameraPausedOverlay" onclick="resumeCamera()">
+        <div class="icon">📷</div>
+        <div class="text">Camera Paused</div>
+        <div class="subtext">Tap to resume scanning</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-number" id="scanCount">0</div>
+        <div class="stat-label">Scans</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" id="successCount">0</div>
+        <div class="stat-label">Success</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" id="arrivals">-</div>
+        <div class="stat-label">In</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" id="departures">-</div>
+        <div class="stat-label">Out</div>
+      </div>
+    </div>
+
+    <div class="activity-feed-container">
+      <div class="activity-feed-header">
+        <h4>📋 Recent Activity</h4>
+        <button class="clear-btn" onclick="clearActivityFeed()">Clear</button>
+      </div>
+      <div class="activity-feed" id="activityFeed">
+        <div class="activity-empty" id="activityEmpty">
+          No scans yet. Start scanning to see activity here.
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">© The Winners Joy Int'l Academy</div>
+  </div>
+
+  <!-- Critical Error Popup -->
+  <div class="popup-overlay" id="popupOverlay">
+    <div class="popup error" id="popup">
+      <div class="popup-header">
+        <div class="popup-icon" id="popupIcon">❌</div>
+        <h3 id="popupTitle">Error</h3>
+      </div>
+      <div class="popup-body">
+        <p id="popupMessage">An error occurred.</p>
+      </div>
+      <div class="popup-footer">
+        <button class="popup-btn" onclick="closePopup()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="successSound" src="https://assets.mixkit.co/active_storage/sfx/221/221-preview.mp3"></audio>
+  <audio id="warningSound" src="https://assets.mixkit.co/active_storage/sfx/222/222-preview.mp3"></audio>
+  <audio id="errorSound" src="https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3"></audio>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js" type="text/javascript"></script>
+  
+  <script>
+    // ============================================================
+    // ⚙️ CONFIGURATION — PASTE YOUR APPS SCRIPT URL HERE
+    // How to get this URL:
+    //   1. Open your Apps Script project
+    //   2. Click Deploy → Manage Deployments
+    //   3. Copy the "Web app URL" (looks like https://script.google.com/macros/s/ABC123/exec)
+    //   4. Paste it below, replacing the placeholder text
+    // ============================================================
+    const APPS_SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+
+    // ============================================================
+    // 🌐 BACKEND COMMUNICATION
+    // This function is the replacement for google.script.run
+    // It sends a request to your Apps Script and gets back the result
+    //
+    // Simple analogy: Instead of shouting across the room (google.script.run),
+    // we now send a letter (fetch) to the Apps Script, and wait for a reply
+    // ============================================================
+    async function callBackend(action, params = {}) {
+      const payload = JSON.stringify({ action, ...params });
+      
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        // We use 'text/plain' here (not 'application/json') because Google's
+        // servers require this to allow requests from external websites.
+        // The data inside is still JSON — we just label the envelope differently.
+        headers: { 'Content-Type': 'text/plain' },
+        body: payload,
+        redirect: 'follow'
+      });
+      
+      return response.json();
+    }
+
+
+    // ==================== GLOBAL STATE ====================
+    let currentStaff = null;
+    let currentMode = 'arrival';
+    let html5QrCode = null;
+    let isProcessing = false;
+    let isCameraActive = false;
+    let scanCounter = 0;
+    let successCounter = 0;
+    let offlineQueue = [];
+    let sessionTimeout;
+    let soundEnabled = true;
+    let activityHistory = [];
+    const SESSION_DURATION = 8 * 60 * 60 * 1000;
+    const MAX_ACTIVITY_ITEMS = 15;
+
+    // ==================== INITIALIZATION ====================
+    window.onload = function() {
+      loadOfflineQueue();
+      updateQueueCounter();
+      loadSoundPreference();
+      
+      const savedStaff = localStorage.getItem('twjia_staff_v2');
+      const sessionExpiry = localStorage.getItem('twjia_session_expiry');
+      
+      if (savedStaff && sessionExpiry && new Date().getTime() < parseInt(sessionExpiry)) {
+        currentStaff = JSON.parse(savedStaff);
+        showApp();
+      } else {
+        localStorage.removeItem('twjia_staff_v2');
+        localStorage.removeItem('twjia_session_expiry');
+      }
+
+      window.addEventListener('online', onOnline);
+      window.addEventListener('offline', onOffline);
+      
+      if (!navigator.onLine) onOffline();
+    };
+
+
+    // ==================== LOGIN ====================
+    // CHANGED: was google.script.run.attemptLogin()
+    // NOW: uses callBackend('attemptLogin', ...) — async/await style
+    async function doLogin() {
+      const input = document.getElementById('passcodeInput');
+      const btn = document.querySelector('.btn-login');
+      const btnText = document.getElementById('loginBtnText');
+      const msg = document.getElementById('loginMsg');
+      const code = input.value;
+
+      if (!code || code.length < 4) {
+        msg.textContent = "⚠️ Please enter a valid passcode";
+        return;
+      }
+
+      btnText.innerHTML = '<span class="loading"></span> Verifying...';
+      btn.disabled = true;
+      msg.textContent = "";
+
+      try {
+        const response = await callBackend('attemptLogin', { passcode: code });
+        
+        if (response.success) {
+          currentStaff = { 
+            name: response.userName, 
+            role: response.role,
+            sessionId: response.sessionId 
+          };
+          
+          const expiryTime = new Date().getTime() + SESSION_DURATION;
+          localStorage.setItem('twjia_staff_v2', JSON.stringify(currentStaff));
+          localStorage.setItem('twjia_session_expiry', expiryTime.toString());
+          
+          showApp();
+          startSessionTimer();
+        } else {
+          msg.textContent = "❌ " + response.message;
+          btnText.textContent = "Unlock Scanner";
+          btn.disabled = false;
+          input.value = "";
+          vibrate([200, 100, 200]);
+        }
+      } catch (err) {
+        msg.textContent = "⚠️ Connection Error. Please check internet.";
+        btnText.textContent = "Unlock Scanner";
+        btn.disabled = false;
+      }
+    }
+
+    function startSessionTimer() {
+      clearTimeout(sessionTimeout);
+      sessionTimeout = setTimeout(() => {
+        alert('Session expired. Please login again.');
+        doLogout();
+      }, SESSION_DURATION);
+    }
+
+    function doLogout() {
+      if(confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem('twjia_staff_v2');
+        localStorage.removeItem('twjia_session_expiry');
+        clearTimeout(sessionTimeout);
+        stopCamera();
+        location.reload();
+      }
+    }
+
+    function showApp() {
+      document.getElementById('loginScreen').style.display = 'none';
+      const app = document.getElementById('appContent');
+      app.style.display = 'flex';
+      document.getElementById('staffDisplay').textContent = currentStaff.name;
+      initScanner();
+      loadTodayStats();
+      startSessionTimer();
+    }
+
+
+    // ==================== MODE SWITCHING (UNCHANGED) ====================
+    function setScanMode(mode) {
+      currentMode = mode;
+      const btnIn = document.getElementById('btnIn');
+      const btnOut = document.getElementById('btnOut');
+      const reader = document.getElementById('reader');
+
+      if (mode === 'arrival') {
+        btnIn.classList.add('active-in');
+        btnOut.classList.remove('active-out');
+        reader.classList.remove('mode-out');
+      } else {
+        btnOut.classList.add('active-out');
+        btnIn.classList.remove('active-in');
+        reader.classList.add('mode-out');
+      }
+    }
+
+
+    // ==================== SOUND CONTROL (UNCHANGED) ====================
+    function loadSoundPreference() {
+      const saved = localStorage.getItem('twjia_sound_enabled');
+      soundEnabled = saved !== 'false';
+      updateSoundButton();
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      localStorage.setItem('twjia_sound_enabled', soundEnabled.toString());
+      updateSoundButton();
+    }
+
+    function updateSoundButton() {
+      const btn = document.getElementById('soundToggle');
+      if (soundEnabled) {
+        btn.textContent = '🔊';
+        btn.classList.remove('muted');
+        btn.classList.add('active');
+      } else {
+        btn.textContent = '🔇';
+        btn.classList.remove('active');
+        btn.classList.add('muted');
+      }
+    }
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      const sound = document.getElementById(type + 'Sound');
+      if (sound) {
+        sound.currentTime = 0;
+        sound.play().catch(e => console.log('Audio play failed:', e));
+      }
+    }
+
+
+    // ==================== SCANNER (UNCHANGED) ====================
+    function initScanner() {
+      html5QrCode = new Html5Qrcode("reader");
+      
+      Html5Qrcode.getCameras().then(cameras => {
+        const sel = document.getElementById('cameraSelect');
+        sel.innerHTML = '<option value="off">📷 Camera OFF</option>';
+        
+        if (cameras && cameras.length) {
+          cameras.forEach((cam, index) => {
+            let opt = document.createElement('option');
+            opt.value = cam.id;
+            opt.text = cam.label || "Camera " + (index + 1);
+            sel.appendChild(opt);
+          });
+          
+          const backCam = cameras.find(c => c.label.toLowerCase().includes('back')) || cameras[0];
+          sel.value = backCam.id;
+          startCam(backCam.id);
+
+          sel.addEventListener('change', handleCameraChange);
+        }
+      }).catch(err => {
+        console.error("Camera enumeration error:", err);
+        addActivityItem('error', 'Camera', 'Camera access denied. Please grant permissions.', null);
+      });
+    }
+
+    function handleCameraChange() {
+      const sel = document.getElementById('cameraSelect');
+      const selectedValue = sel.value;
+      
+      if (selectedValue === 'off') {
+        stopCamera();
+        showCameraPausedOverlay(true);
+      } else {
+        showCameraPausedOverlay(false);
+        if (isCameraActive) {
+          html5QrCode.stop().then(() => startCam(selectedValue))
+            .catch(err => startCam(selectedValue));
+        } else {
+          startCam(selectedValue);
+        }
+      }
+    }
+
+    function startCam(id) {
+      if (!id || id === 'off') return;
+      showCameraPausedOverlay(false);
+      html5QrCode.start(id, { fps: 10, qrbox: 250 }, onScanSuccess)
+        .then(() => { isCameraActive = true; })
+        .catch(err => {
+          console.error("Camera start error:", err);
+          addActivityItem('error', 'Camera', 'Failed to start camera: ' + err, null);
+        });
+    }
+
+    function stopCamera() {
+      if (html5QrCode && isCameraActive) {
+        html5QrCode.stop().then(() => { isCameraActive = false; })
+          .catch(err => { isCameraActive = false; });
+      }
+    }
+
+    function showCameraPausedOverlay(show) {
+      const overlay = document.getElementById('cameraPausedOverlay');
+      if (show) overlay.classList.add('active');
+      else overlay.classList.remove('active');
+    }
+
+    function resumeCamera() {
+      const sel = document.getElementById('cameraSelect');
+      for (let i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value !== 'off') {
+          sel.value = sel.options[i].value;
+          handleCameraChange();
+          return;
+        }
+      }
+      showCriticalPopup('No Camera', 'No cameras detected. Please check permissions.');
+    }
+
+
+    // ==================== QR SCAN HANDLER ====================
+    // CHANGED: was google.script.run.processScan()
+    // NOW: uses callBackend('processScan', ...)
+    async function onScanSuccess(decodedText) {
+      if (isProcessing) return;
+      if (!decodedText.includes('TWJIA')) return;
+
+      isProcessing = true;
+      scanCounter++;
+      document.getElementById('scanCount').textContent = scanCounter;
+      vibrate([100]);
+      
+      if (!navigator.onLine) {
+        queueOfflineScan(decodedText);
+        return;
+      }
+
+      try {
+        const result = await callBackend('processScan', {
+          admissionNo: decodedText.trim(),
+          device: 'mobile-scanner',
+          scanMode: currentMode,
+          staffName: currentStaff.name
+        });
+        handleResult(result);
+      } catch (e) {
+        handleError(e);
+      }
+    }
+
+
+    // ==================== MANUAL ENTRY ====================
+    function toggleManualEntry() {
+      const form = document.getElementById('manualEntryForm');
+      form.classList.toggle('active');
+      if (form.classList.contains('active')) {
+        document.getElementById('manualAdmission').focus();
+      }
+    }
+
+    // CHANGED: was google.script.run.manualEntry()
+    // NOW: uses callBackend('manualEntry', ...)
+    async function submitManualEntry() {
+      const admission = document.getElementById('manualAdmission').value.trim();
+      const reason = document.getElementById('manualReason').value;
+      
+      if (!admission) { alert('Please enter admission number'); return; }
+      if (!reason) { alert('Please select a reason'); return; }
+
+      isProcessing = true;
+      
+      try {
+        const result = await callBackend('manualEntry', {
+          admissionNo: admission,
+          scanMode: currentMode,
+          staffName: currentStaff.name,
+          reason: reason
+        });
+        handleResult(result);
+        document.getElementById('manualAdmission').value = '';
+        document.getElementById('manualReason').value = '';
+        toggleManualEntry();
+      } catch (e) {
+        handleError(e);
+      }
+    }
+
+
+    // ==================== OFFLINE SUPPORT ====================
+    function loadOfflineQueue() {
+      const saved = localStorage.getItem('twjia_offline_queue');
+      offlineQueue = saved ? JSON.parse(saved) : [];
+    }
+
+    function saveOfflineQueue() {
+      localStorage.setItem('twjia_offline_queue', JSON.stringify(offlineQueue));
+    }
+
+    function queueOfflineScan(admission) {
+      offlineQueue.push({
+        admission: admission,
+        scanMode: currentMode,
+        timestamp: new Date().toISOString(),
+        staff: currentStaff.name
+      });
+      saveOfflineQueue();
+      updateQueueCounter();
+      isProcessing = false;
+      vibrate([200, 100, 200]);
+      addActivityItem('warning', admission, 'Saved offline - will sync when online', null);
+      showScanFlash('warning');
+      playSound('warning');
+    }
+
+    // CHANGED: was google.script.run.processOfflineQueue()
+    // NOW: uses callBackend('processOfflineQueue', ...)
+    async function syncOfflineScans() {
+      if (offlineQueue.length === 0) { alert('No offline scans to sync'); return; }
+      if (!navigator.onLine) { alert('Cannot sync while offline'); return; }
+
+      const btn = event.target;
+      btn.disabled = true;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<span class="loading"></span>';
+
+      try {
+        const result = await callBackend('processOfflineQueue', {
+          queueItems: offlineQueue,
+          staffName: currentStaff.name
+        });
+        offlineQueue = [];
+        saveOfflineQueue();
+        updateQueueCounter();
+        addActivityItem('success', 'Sync Complete', `${result.successful} scans synced, ${result.failed} failed`, null);
+        loadTodayStats();
+      } catch (err) {
+        addActivityItem('error', 'Sync Failed', err.message || err, null);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+
+    function updateQueueCounter() {
+      document.getElementById('queueCount').textContent = offlineQueue.length;
+    }
+
+    function onOnline() {
+      document.getElementById('offlineBanner').style.display = 'none';
+      if (offlineQueue.length > 0) {
+        addActivityItem('success', 'Back Online', `${offlineQueue.length} scans ready to sync`, null);
+      }
+    }
+
+    function onOffline() {
+      document.getElementById('offlineBanner').style.display = 'block';
+      addActivityItem('warning', 'Offline', 'Scans will be saved locally', null);
+    }
+
+
+    // ==================== RESULT HANDLING (UNCHANGED) ====================
+    function handleResult(result) {
+      isProcessing = false;
+      
+      if (result.success) {
+        successCounter++;
+        document.getElementById('successCount').textContent = successCounter;
+        const modeText = currentMode === 'arrival' ? 'Clocked IN' : 'Clocked OUT';
+        const notifyText = result.notificationStatus ? ` • ${result.notificationStatus}` : '';
+        addActivityItem('success', result.studentName, `${modeText} at ${result.time}${notifyText}`, result.admissionNo);
+        showScanFlash('success');
+        playSound('success');
+        vibrate([100, 50, 100]);
+        loadTodayStats();
+      } else if (result.type === 'warning') {
+        addActivityItem('warning', result.studentName || 'Unknown', result.message, null);
+        showScanFlash('warning');
+        playSound('warning');
+        vibrate([200, 100, 200]);
+      } else {
+        if (result.message && result.message.includes('not found')) {
+          showCriticalPopup('Student Not Found', result.message);
+        } else {
+          addActivityItem('error', 'Error', result.message, null);
+        }
+        showScanFlash('error');
+        playSound('error');
+        vibrate([300, 100, 300]);
+      }
+    }
+
+    function handleError(e) {
+      isProcessing = false;
+      showCriticalPopup('Connection Error', (e.message || e) + '\n\nPlease check internet connection.');
+      showScanFlash('error');
+      playSound('error');
+      vibrate([300, 100, 300]);
+    }
+
+
+    // ==================== STATS ====================
+    // CHANGED: was google.script.run.getTodayStats()
+    // NOW: uses callBackend('getTodayStats')
+    async function loadTodayStats() {
+      try {
+        const stats = await callBackend('getTodayStats');
+        document.getElementById('arrivals').textContent = stats.arrivals || 0;
+        document.getElementById('departures').textContent = stats.departures || 0;
+      } catch (e) {
+        console.log('Failed to load stats:', e);
+      }
+    }
+
+
+    // ==================== ACTIVITY FEED (UNCHANGED) ====================
+    function addActivityItem(type, name, message, admissionNo) {
+      const feed = document.getElementById('activityFeed');
+      const emptyMsg = document.getElementById('activityEmpty');
+      if (emptyMsg) emptyMsg.style.display = 'none';
+      
+      const item = document.createElement('div');
+      item.className = `activity-item ${type}`;
+      const icon = type === 'success' ? '✅' : (type === 'warning' ? '⚠️' : '❌');
+      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      
+      item.innerHTML = `
+        <div class="activity-icon">${icon}</div>
+        <div class="activity-details">
+          <div class="activity-name">${escapeHtml(name)}</div>
+          <div class="activity-message">${escapeHtml(message)}</div>
+        </div>
+        <div class="activity-time">${time}</div>
+      `;
+      
+      feed.insertBefore(item, feed.firstChild);
+      activityHistory.unshift({ type, name, message, time, admissionNo });
+      
+      while (feed.children.length > MAX_ACTIVITY_ITEMS + 1) {
+        feed.removeChild(feed.lastChild);
+      }
+      if (activityHistory.length > MAX_ACTIVITY_ITEMS) {
+        activityHistory = activityHistory.slice(0, MAX_ACTIVITY_ITEMS);
+      }
+    }
+
+    function clearActivityFeed() {
+      const feed = document.getElementById('activityFeed');
+      feed.innerHTML = `<div class="activity-empty" id="activityEmpty">No scans yet. Start scanning to see activity here.</div>`;
+      activityHistory = [];
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+
+    // ==================== VISUAL FEEDBACK (UNCHANGED) ====================
+    function showScanFlash(type) {
+      const flash = document.getElementById('scanFlash');
+      flash.className = 'scan-flash';
+      void flash.offsetWidth;
+      flash.classList.add(type);
+      setTimeout(() => { flash.className = 'scan-flash'; }, 500);
+    }
+
+    function showCriticalPopup(title, message) {
+      document.getElementById('popupTitle').textContent = title;
+      document.getElementById('popupMessage').textContent = message;
+      document.getElementById('popupOverlay').style.display = 'flex';
+    }
+
+    function closePopup() {
+      document.getElementById('popupOverlay').style.display = 'none';
+    }
+
+    function vibrate(pattern) {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+
+    // ==================== KEYBOARD HANDLERS (UNCHANGED) ====================
+    document.getElementById('passcodeInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') doLogin();
+    });
+
+    document.getElementById('manualAdmission').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') submitManualEntry();
+    });
+  </script>
+</body>
+</html>
