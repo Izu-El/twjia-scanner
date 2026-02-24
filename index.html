@@ -672,32 +672,52 @@
     }
 
 
-    // ==================== SCANNER (UNCHANGED) ====================
+    // ==================== SCANNER ====================
     function initScanner() {
       html5QrCode = new Html5Qrcode("reader");
-      
-      Html5Qrcode.getCameras().then(cameras => {
-        const sel = document.getElementById('cameraSelect');
-        sel.innerHTML = '<option value="off">📷 Camera OFF</option>';
-        
-        if (cameras && cameras.length) {
-          cameras.forEach((cam, index) => {
-            let opt = document.createElement('option');
-            opt.value = cam.id;
-            opt.text = cam.label || "Camera " + (index + 1);
-            sel.appendChild(opt);
-          });
-          
-          const backCam = cameras.find(c => c.label.toLowerCase().includes('back')) || cameras[0];
-          sel.value = backCam.id;
-          startCam(backCam.id);
 
-          sel.addEventListener('change', handleCameraChange);
-        }
-      }).catch(err => {
-        console.error("Camera enumeration error:", err);
-        addActivityItem('error', 'Camera', 'Camera access denied. Please grant permissions.', null);
-      });
+      // WHY THIS EXTRA STEP:
+      // On external websites (like GitHub Pages), browsers won't reveal the list
+      // of cameras until the user has explicitly granted camera permission.
+      // So we first ask "can we use your camera?" with getUserMedia().
+      // Once the user taps Allow, the permission is granted and we can then
+      // get the full camera list with getCameras().
+      // Think of it like knocking on the door before entering the room.
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function(stream) {
+          // Permission granted — stop this temporary stream immediately
+          // (we only needed it to trigger the permission prompt)
+          stream.getTracks().forEach(track => track.stop());
+
+          // Now we can safely get the full camera list
+          return Html5Qrcode.getCameras();
+        })
+        .then(function(cameras) {
+          const sel = document.getElementById('cameraSelect');
+          sel.innerHTML = '<option value="off">📷 Camera OFF</option>';
+
+          if (cameras && cameras.length) {
+            cameras.forEach((cam, index) => {
+              let opt = document.createElement('option');
+              opt.value = cam.id;
+              opt.text = cam.label || "Camera " + (index + 1);
+              sel.appendChild(opt);
+            });
+
+            // Auto-select back camera on phones, otherwise first camera
+            const backCam = cameras.find(c => c.label.toLowerCase().includes('back')) || cameras[0];
+            sel.value = backCam.id;
+            startCam(backCam.id);
+
+            sel.addEventListener('change', handleCameraChange);
+          } else {
+            addActivityItem('error', 'Camera', 'No cameras found on this device.', null);
+          }
+        })
+        .catch(function(err) {
+          console.error("Camera permission error:", err);
+          addActivityItem('error', 'Camera', 'Camera access denied. Please allow camera in browser settings and refresh.', null);
+        });
     }
 
     function handleCameraChange() {
