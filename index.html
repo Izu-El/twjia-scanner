@@ -675,84 +675,151 @@
     // ==================== SCANNER ====================
     function initScanner() {
       html5QrCode = new Html5Qrcode("reader");
+      // Show a tap-to-start button inside the scanner area.
+      // WHY: On GitHub Pages the browser requires a real user tap to trigger
+      // the camera permission prompt. We cannot request it automatically on load.
+      // So we show this button — when staff taps it, the browser shows "Allow camera?"
+      showStartCameraButton();
+    }
 
-      // WHY THIS EXTRA STEP:
-      // On external websites (like GitHub Pages), browsers won't reveal the list
-      // of cameras until the user has explicitly granted camera permission.
-      // So we first ask "can we use your camera?" with getUserMedia().
-      // Once the user taps Allow, the permission is granted and we can then
-      // get the full camera list with getCameras().
-      // Think of it like knocking on the door before entering the room.
-      navigator.mediaDevices.getUserMedia({ video: true })
+    function showStartCameraButton() {
+      const reader = document.getElementById('reader');
+      reader.innerHTML = `
+        <div onclick="startCameraWithPermission()" style="
+          width:100%; min-height:250px; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; cursor:pointer;
+          background:linear-gradient(135deg,#1a3a5c,#0d2137);
+          border-radius:12px; gap:12px;">
+          <div style="font-size:3.5em;">📷</div>
+          <div style="font-size:1.1em;font-weight:700;color:white;">Tap to Start Camera</div>
+          <div style="font-size:0.85em;color:rgba(255,255,255,0.6);">Camera permission required</div>
+        </div>`;
+    }
+
+    function startCameraWithPermission() {
+      // Step 1: Ask permission via getUserMedia — this triggers the browser's
+      // "Allow camera?" popup that staff must tap to approve.
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
         .then(function(stream) {
-          // Permission granted — stop this temporary stream immediately
-          // (we only needed it to trigger the permission prompt)
-          stream.getTracks().forEach(track => track.stop());
+          // Permission granted. Stop this temporary stream immediately —
+          // we only needed it to get the permission approved.
+          stream.getTracks().forEach(t => t.stop());
 
-          // Now we can safely get the full camera list
-          return Html5Qrcode.getCameras();
-        })
-        .then(function(cameras) {
-          const sel = document.getElementById('cameraSelect');
-          sel.innerHTML = '<option value="off">📷 Camera OFF</option>';
+          // Step 2: Try to get a named list of cameras for the dropdown.
+          Html5Qrcode.getCameras()
+            .then(function(cameras) {
+              const sel = document.getElementById('cameraSelect');
+              sel.innerHTML = '<option value="off">📷 Camera OFF</option>';
+              sel.addEventListener('change', handleCameraChange);
 
-          if (cameras && cameras.length) {
-            cameras.forEach((cam, index) => {
-              let opt = document.createElement('option');
-              opt.value = cam.id;
-              opt.text = cam.label || "Camera " + (index + 1);
-              sel.appendChild(opt);
+              if (cameras && cameras.length) {
+                cameras.forEach((cam, index) => {
+                  let opt = document.createElement('option');
+                  opt.value = cam.id;
+                  opt.text = cam.label || 'Camera ' + (index + 1);
+                  sel.appendChild(opt);
+                });
+                // Prefer back/rear camera on phones
+                const backCam = cameras.find(c =>
+                  c.label.toLowerCase().includes('back') ||
+                  c.label.toLowerCase().includes('rear') ||
+                  c.label.toLowerCase().includes('environment')
+                ) || cameras[cameras.length - 1];
+                sel.value = backCam.id;
+                startCamById(backCam.id);
+              } else {
+                // Some phones return empty list even after permission is granted.
+                // Use facingMode fallback — starts the back camera directly
+                // without needing a specific camera ID.
+                sel.innerHTML += '<option value="environment" selected>📷 Back Camera</option>';
+                startCamByFacingMode('environment');
+              }
+            })
+            .catch(function() {
+              // getCameras() failed — go straight to facingMode fallback
+              const sel = document.getElementById('cameraSelect');
+              sel.innerHTML = '<option value="off">📷 Camera OFF</option><option value="environment" selected>📷 Back Camera</option>';
+              sel.addEventListener('change', handleCameraChange);
+              startCamByFacingMode('environment');
             });
-
-            // Auto-select back camera on phones, otherwise first camera
-            const backCam = cameras.find(c => c.label.toLowerCase().includes('back')) || cameras[0];
-            sel.value = backCam.id;
-            startCam(backCam.id);
-
-            sel.addEventListener('change', handleCameraChange);
-          } else {
-            addActivityItem('error', 'Camera', 'No cameras found on this device.', null);
-          }
         })
         .catch(function(err) {
-          console.error("Camera permission error:", err);
-          addActivityItem('error', 'Camera', 'Camera access denied. Please allow camera in browser settings and refresh.', null);
+          console.error('Camera permission denied:', err);
+          document.getElementById('reader').innerHTML = `
+            <div style="min-height:250px;display:flex;flex-direction:column;
+              align-items:center;justify-content:center;background:#2c1515;
+              border-radius:12px;gap:10px;padding:20px;text-align:center;">
+              <div style="font-size:2.5em;">🚫</div>
+              <div style="color:white;font-weight:700;">Camera Access Denied</div>
+              <div style="color:rgba(255,255,255,0.7);font-size:0.85em;">
+                Go to your browser Settings,<br>allow camera for this site,<br>then refresh the page.
+              </div>
+            </div>`;
         });
+    }
+
+    // Start camera using a specific device ID (when enumeration works)
+    function startCamById(id) {
+      if (!id || id === 'off') return;
+      showCameraPausedOverlay(false);
+      // Clear the tap-to-start button and let the library render the video
+      document.getElementById('reader').innerHTML = '';
+      html5QrCode.start(id, { fps: 10, qrbox: 250 }, onScanSuccess)
+        .then(() => { isCameraActive = true; })
+        .catch(err => {
+          console.error('Camera start error:', err);
+          // If starting by ID fails, try facingMode as last resort
+          startCamByFacingMode('environment');
+        });
+    }
+
+    // Start camera using facingMode (fallback when no camera ID available)
+    function startCamByFacingMode(facingMode) {
+      showCameraPausedOverlay(false);
+      document.getElementById('reader').innerHTML = '';
+      html5QrCode.start(
+        { facingMode: facingMode },
+        { fps: 10, qrbox: 250 },
+        onScanSuccess
+      )
+        .then(() => { isCameraActive = true; })
+        .catch(err => {
+          console.error('FacingMode camera start error:', err);
+          addActivityItem('error', 'Camera', 'Could not start camera. Try refreshing.', null);
+        });
+    }
+
+    // Kept as alias so handleCameraChange works for both ID and facingMode values
+    function startCam(id) {
+      if (id === 'environment' || id === 'user') {
+        startCamByFacingMode(id);
+      } else {
+        startCamById(id);
+      }
     }
 
     function handleCameraChange() {
       const sel = document.getElementById('cameraSelect');
       const selectedValue = sel.value;
-      
       if (selectedValue === 'off') {
         stopCamera();
         showCameraPausedOverlay(true);
       } else {
         showCameraPausedOverlay(false);
         if (isCameraActive) {
-          html5QrCode.stop().then(() => startCam(selectedValue))
-            .catch(err => startCam(selectedValue));
+          html5QrCode.stop()
+            .then(() => { isCameraActive = false; startCam(selectedValue); })
+            .catch(() => startCam(selectedValue));
         } else {
           startCam(selectedValue);
         }
       }
     }
 
-    function startCam(id) {
-      if (!id || id === 'off') return;
-      showCameraPausedOverlay(false);
-      html5QrCode.start(id, { fps: 10, qrbox: 250 }, onScanSuccess)
-        .then(() => { isCameraActive = true; })
-        .catch(err => {
-          console.error("Camera start error:", err);
-          addActivityItem('error', 'Camera', 'Failed to start camera: ' + err, null);
-        });
-    }
-
     function stopCamera() {
       if (html5QrCode && isCameraActive) {
         html5QrCode.stop().then(() => { isCameraActive = false; })
-          .catch(err => { isCameraActive = false; });
+          .catch(() => { isCameraActive = false; });
       }
     }
 
